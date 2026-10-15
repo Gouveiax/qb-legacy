@@ -1,0 +1,1 @@
+deprecated=yes minizip=yes sdl=yes accesskit=yes module_text_server_adv_enabled=yes module_text_server_fb_enabled=no
