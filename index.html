@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="QB Legacy">
+<meta name="theme-color" content="#0b1116">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>QB Legacy</title>
+<style>
+/* Layout: one full-screen game canvas; a loading card centered over it until the engine starts. Single dark look by choice (it matches the game's own UI). */
+:root {
+  --bg: #0b1116;
+  --panel: #101820;
+  --fg: #e8eef2;
+  --muted: #9fb3c2;
+  --accent: #19b5a5;
+  --warn: #ffd23f;
+  --font-ui: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  outline: none;
+}
+#loader {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px);
+}
+.card {
+  width: min(320px, 100%);
+  display: grid;
+  gap: 14px;
+  text-align: center;
+}
+.mark {
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: 0.04em;
+  text-wrap: balance;
+}
+.mark span { color: var(--accent); }
+.sub { color: var(--muted); font-size: 14px; }
+.bar {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--panel);
+  overflow: hidden;
+  border: 1px solid #24313d;
+}
+.bar > i {
+  display: block;
+  height: 100%;
+  width: 4%;
+  background: var(--warn);
+  transition: width 0.2s ease;
+}
+#status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+#status.err { color: #ff8a7a; }
+.yard {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+
+</head>
+<body>
+<canvas id="canvas" tabindex="0"></canvas>
+
+<div id="loader" role="status" aria-live="polite">
+  <div class="card">
+    <div class="mark"><span>QB</span> LEGACY</div>
+    <div class="sub" id="sub">Carreira de quarterback</div>
+    <div class="bar"><i id="fill"></i></div>
+    <div class="yard"><span>G</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div>
+    <div id="status">Carregando…</div>
+  </div>
+</div>
+
+<script>
+// The engine's 39 MB wasm is published gzip-compressed (engine.gz.wasm) to fit the
+// per-file limit; this shim decompresses it in the browser when Godot fetches it.
+(function () {
+  var WASM_SIZE = 39509339;
+  var realFetch = window.fetch.bind(window);
+  var pt = (navigator.language || "").toLowerCase().indexOf("pt") === 0;
+  var T = pt
+    ? { sub: "Carreira de quarterback · do High School ao Hall da Fama", dl: "Baixando o jogo… ", unz: "Preparando o motor…", start: "Iniciando…",
+        err: "Não foi possível iniciar o jogo: ", nofeat: "Este navegador não suporta o jogo: " }
+    : { sub: "Quarterback career · from High School to the Hall of Fame", dl: "Downloading… ", unz: "Preparing the engine…", start: "Starting…",
+        err: "Could not start the game: ", nofeat: "This browser can't run the game: " };
+  document.getElementById("sub").textContent = T.sub;
+  var statusEl = document.getElementById("status");
+  var fill = document.getElementById("fill");
+  function setStatus(text, frac) {
+    statusEl.textContent = text;
+    if (frac != null) fill.style.width = Math.max(4, Math.min(100, frac * 100)).toFixed(0) + "%";
+  }
+  function fail(msg) {
+    statusEl.className = "err";
+    statusEl.textContent = msg;
+  }
+  window.__qbStatus = { setStatus: setStatus, fail: fail, T: T };
+
+  async function fetchWasm(url, init) {
+    var res = await realFetch(url.replace(/index\.wasm/, "engine.gz.wasm"), init);
+    if (!res.ok) return res;
+    var total = Number(res.headers.get("Content-Length")) || 10082553;
+    var reader = res.body.getReader();
+    var chunks = [];
+    var got = 0;
+    for (;;) {
+      var step = await reader.read();
+      if (step.done) break;
+      chunks.push(step.value);
+      got += step.value.length;
+      setStatus(T.dl + (got / 1048576).toFixed(1) + " / " + (total / 1048576).toFixed(1) + " MB", 0.05 + 0.75 * (got / total));
+    }
+    var blob = new Blob(chunks);
+    var head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+    var body = blob;
+    if (head[0] === 0x1f && head[1] === 0x8b) {
+      setStatus(T.unz, 0.85);
+      body = await new Response(blob.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
+    }
+    setStatus(T.start, 0.95);
+    return new Response(body, { status: 200, headers: { "Content-Type": "application/wasm", "Content-Length": String(WASM_SIZE) } });
+  }
+
+  window.fetch = function (input, init) {
+    var url = typeof input === "string" ? input : (input && input.url) || "";
+    if (/index\.wasm(\?|$)/.test(url)) return fetchWasm(url, init);
+    if (/index\.pck(\?|$)/.test(url)) return realFetch(url.replace(/index\.pck/, "game.pck.wasm"), init);
+    return realFetch(input, init);
+  };
+})();
+</script>
+<script src="index.js"></script>
+<script>
+(function () {
+  var S = window.__qbStatus;
+  var GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":464944,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+  var missing = Engine.getMissingFeatures({ threads: false });
+  if (missing.length) {
+    S.fail(S.T.nofeat + missing.join(", "));
+    return;
+  }
+  if (typeof DecompressionStream === "undefined") {
+    S.fail(S.T.nofeat + "DecompressionStream");
+    return;
+  }
+  var engine = new Engine(GODOT_CONFIG);
+  engine.startGame({
+    onProgress: function (cur, total) {
+      if (total > 0 && cur < total) S.setStatus(S.T.dl, 0.05 + 0.75 * (cur / total));
+    }
+  }).then(function () {
+    document.getElementById("loader").hidden = true;
+    document.getElementById("canvas").focus();
+  }).catch(function (err) {
+    S.fail(S.T.err + (err && err.message ? err.message : String(err)));
+  });
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+}
+</script>
+</body>
+</html>
