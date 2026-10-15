@@ -1,0 +1,1 @@
+disable_3d=no disable_physics_2d=no disable_physics_3d=no disable_navigation_2d=no disable_navigation_3d=no disable_xr=no
