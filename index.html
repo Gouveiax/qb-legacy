@@ -157,28 +157,35 @@ body {
   }
   window.__qbStatus = { setStatus: setStatus, fail: fail, T: T };
 
+  // Streams the engine: download -> gunzip -> WebAssembly compile all overlap
+  // (no waiting for the whole file first). Progress counts downloaded bytes.
   async function fetchWasm(url, init) {
     var res = await realFetch(url.replace(/index\.wasm/, "engine.gz.wasm"), init);
     if (!res.ok) return res;
     var total = Number(res.headers.get("Content-Length")) || 10082553;
     var reader = res.body.getReader();
-    var chunks = [];
+    var first = await reader.read();
     var got = 0;
-    for (;;) {
-      var step = await reader.read();
-      if (step.done) break;
-      chunks.push(step.value);
-      got += step.value.length;
-      setStatus(T.dl + (got / 1048576).toFixed(1) + " / " + (total / 1048576).toFixed(1) + " MB", 0.05 + 0.75 * (got / total));
+    function count(chunk) {
+      got += chunk.length;
+      setStatus(T.dl + (got / 1048576).toFixed(1) + " / " + (total / 1048576).toFixed(1) + " MB", 0.05 + 0.85 * Math.min(1, got / total));
     }
-    var blob = new Blob(chunks);
-    var head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
-    var body = blob;
-    if (head[0] === 0x1f && head[1] === 0x8b) {
-      setStatus(T.unz, 0.85);
-      body = await new Response(blob.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
-    }
-    setStatus(T.start, 0.95);
+    var raw = new ReadableStream({
+      start: function (ctrl) {
+        if (first.done) { ctrl.close(); return; }
+        count(first.value);
+        ctrl.enqueue(first.value);
+      },
+      pull: async function (ctrl) {
+        var step = await reader.read();
+        if (step.done) { setStatus(T.start, 0.95); ctrl.close(); return; }
+        count(step.value);
+        ctrl.enqueue(step.value);
+      }
+    });
+    var head = first.done ? null : first.value;
+    var gz = head && head.length > 1 && head[0] === 0x1f && head[1] === 0x8b;
+    var body = gz ? raw.pipeThrough(new DecompressionStream("gzip")) : raw;
     return new Response(body, { status: 200, headers: { "Content-Type": "application/wasm", "Content-Length": String(WASM_SIZE) } });
   }
 
@@ -194,7 +201,7 @@ body {
 <script>
 (function () {
   var S = window.__qbStatus;
-  var GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":618964,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+  var GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":621620,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
   var missing = Engine.getMissingFeatures({ threads: false });
   if (missing.length) {
     S.fail(S.T.nofeat + missing.join(", "));

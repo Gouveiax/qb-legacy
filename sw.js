@@ -1,18 +1,27 @@
-// QB Legacy service worker: caches the game so it opens offline and loads
-// instantly after the first visit. CACHE changes on every build (make_site.sh),
-// which drops the old copy and fetches the new version.
-const CACHE = "qb-legacy-9b980dc704";
-const FILES = ["./", "index.html", "index.js", "engine.gz.wasm", "game.pck.wasm",
-  "index.audio.worklet.js", "index.audio.position.worklet.js",
-  "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
+// QB Legacy service worker: keeps the game on the device so it opens offline
+// and fast. Two caches: the engine (big, rarely changes) and the game (small,
+// changes with every update), so an update only downloads the game part.
+const ENGINE = "qb-engine-36edfd6629";
+const GAME = "qb-game-44e338c0d3";
+const ENGINE_FILES = ["index.js", "engine.gz.wasm", "index.audio.worklet.js", "index.audio.position.worklet.js"];
+const GAME_FILES = ["./", "index.html", "game.pck.wasm", "manifest.webmanifest",
+  "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(Promise.all([
+    caches.open(ENGINE).then(async (c) => {
+      // only fetch engine files this device doesn't have yet
+      for (const f of ENGINE_FILES) {
+        if (!(await c.match(f))) await c.add(f);
+      }
+    }),
+    caches.open(GAME).then((c) => c.addAll(GAME_FILES)),
+  ]).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    .then((keys) => Promise.all(keys.filter((k) => k !== ENGINE && k !== GAME).map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
