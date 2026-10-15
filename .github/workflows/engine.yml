@@ -21,9 +21,10 @@ jobs:
       matrix:
         include:
           - { variant: "", extra: "" }
-          - { variant: "-adv", extra: "module_text_server_adv_enabled=yes module_text_server_fb_enabled=no" }
-          - { variant: "-nolto", extra: "lto=none" }
-          - { variant: "-adv-nolto", extra: "module_text_server_adv_enabled=yes module_text_server_fb_enabled=no lto=none" }
+          - { variant: "-with3d", extra: "disable_3d=no" }
+          - { variant: "-nodisable", extra: "disable_3d=no disable_physics_2d=no disable_physics_3d=no disable_navigation_2d=no disable_navigation_3d=no disable_xr=no" }
+          - { variant: "-mods", extra: "MODS_ON" }
+          - { variant: "-misc", extra: "deprecated=yes minizip=yes sdl=yes accesskit=yes" }
     steps:
       - uses: actions/checkout@v4
         with: { path: game }
@@ -36,7 +37,13 @@ jobs:
         working-directory: godot
         run: |
           cp ../game/engine/custom.py custom.py
-          scons profile=custom.py ${{ matrix.extra }} -j"$(nproc)" verbose=no 2>&1 | tail -n 80
+          EXTRA="${{ matrix.extra }}"
+          if [ "$EXTRA" = "MODS_ON" ]; then
+            # every module back on except the 3D / XR / physics ones the disable_* flags need off
+            EXTRA=$(python3 -c "import re;s=open('custom.py').read();print(' '.join('module_%s_enabled=yes'%m for m in re.findall(r'\"([a-z0-9_]+)\"',s[s.index('for _m in'):]) if m not in ('godot_physics_2d','godot_physics_3d','jolt_physics','navigation_2d','navigation_3d','openxr','mobile_vr','webxr','csg','gridmap','raycast','lightmapper_rd','xatlas_unwrap','vhacd','gltf','fbx','meshoptimizer')))")
+          fi
+          echo "extra: $EXTRA"
+          scons profile=custom.py $EXTRA -j"$(nproc)" verbose=no 2>&1 | tail -n 80
           ls -la bin
       - name: Publish
         run: |
