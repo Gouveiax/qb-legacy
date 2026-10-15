@@ -20,11 +20,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { variant: "", extra: "" }
-          - { variant: "-with3d", extra: "disable_3d=no" }
-          - { variant: "-nodisable", extra: "disable_3d=no disable_physics_2d=no disable_physics_3d=no disable_navigation_2d=no disable_navigation_3d=no disable_xr=no" }
-          - { variant: "-mods", extra: "MODS_ON" }
-          - { variant: "-misc", extra: "deprecated=yes minizip=yes sdl=yes accesskit=yes" }
+          - { variant: "-dep", extra: "deprecated=yes" }
+          - { variant: "-zip", extra: "minizip=yes" }
+          - { variant: "-sdl", extra: "sdl=yes" }
+          - { variant: "-ak", extra: "accesskit=yes" }
+          - { variant: "-misc-adv", extra: "deprecated=yes minizip=yes sdl=yes accesskit=yes module_text_server_adv_enabled=yes module_text_server_fb_enabled=no" }
     steps:
       - uses: actions/checkout@v4
         with: { path: game }
