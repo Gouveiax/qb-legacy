@@ -1,5 +1,6 @@
 # Builds the slim Godot web export template (engine/custom.py) and commits it
-# to the "engine-template" branch, where the game build picks it up.
+# to the "engine-template[-variant]" branch, where the game build picks it up.
+# Variants override a few options to compare size and start-up speed.
 name: Slim web engine
 on:
   workflow_dispatch:
@@ -10,11 +11,19 @@ permissions:
   contents: write
 env:
   GODOT_REF: 4.7-stable
-  EM_VERSION: 4.0.11
+  EM_VERSION: 4.0.20
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: "", extra: "" }
+          - { variant: "-adv", extra: "module_text_server_adv_enabled=yes module_text_server_fb_enabled=no" }
+          - { variant: "-nolto", extra: "lto=none" }
+          - { variant: "-adv-nolto", extra: "module_text_server_adv_enabled=yes module_text_server_fb_enabled=no lto=none" }
     steps:
       - uses: actions/checkout@v4
         with: { path: game }
@@ -27,15 +36,16 @@ jobs:
         working-directory: godot
         run: |
           cp ../game/engine/custom.py custom.py
-          scons profile=custom.py -j"$(nproc)" verbose=no 2>&1 | tail -n 80
+          scons profile=custom.py ${{ matrix.extra }} -j"$(nproc)" verbose=no 2>&1 | tail -n 80
           ls -la bin
-      - name: Publish to the engine-template branch
+      - name: Publish
         run: |
           mkdir out && cp godot/bin/*.zip out/web_nothreads_release.zip
           cp game/engine/custom.py out/
+          echo "${{ matrix.extra }}" > out/extra.txt
           cd out
-          git init -q -b engine-template
+          git init -q -b b
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add -A && git commit -qm "Slim web template (${{ env.GODOT_REF }})"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" engine-template
+          git add -A && git commit -qm "Slim web template (${{ env.GODOT_REF }}) ${{ matrix.extra }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" b:engine-template${{ matrix.variant }}
