@@ -1,0 +1,1 @@
+deprecated=yes minizip=yes sdl=yes accesskit=yes
