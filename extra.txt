@@ -1,0 +1,1 @@
+disable_physics_2d=no disable_navigation_2d=no module_godot_physics_2d_enabled=yes module_navigation_2d_enabled=yes
