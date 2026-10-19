@@ -25,7 +25,10 @@
   color-scheme: dark;
 }
 [hidden] { display: none !important; }
-html, body { height: 100%; overflow: hidden; }
+/* The page never scrolls or grows: everything is pinned to the screen. On iOS a
+   canvas wider than the screen (e.g. right after turning back from landscape)
+   widens the page, which resizes the canvas again: a flicker loop. */
+html, body { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
 body {
   margin: 0;
   background: var(--bg);
@@ -39,10 +42,30 @@ body {
 }
 #canvas {
   display: block;
-  width: 100%;
-  height: 100%;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100% !important;   /* the screen decides, not the engine's inline size */
+  height: 100% !important;
   background: var(--bg);
   outline: none;
+}
+/* phones held sideways: the game is made for portrait */
+#rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: none;
+  place-items: center;
+  background: var(--bg);
+  color: var(--fg);
+  font: 600 18px/1.4 var(--font-ui);
+  text-align: center;
+  padding: 24px;
+}
+#rotate small { display: block; color: var(--muted); font-weight: 400; font-size: 14px; margin-top: 6px; }
+@media (orientation: landscape) and (max-height: 520px) {
+  #rotate { display: grid; }
 }
 #loader {
   position: fixed;
@@ -99,6 +122,8 @@ body {
 <body>
 <canvas id="canvas" tabindex="0"></canvas>
 
+<div id="rotate"><div>↻ <span id="rot-t">Gire o celular para a vertical</span><small id="rot-s">QB Legacy é jogado em pé.</small></div></div>
+
 <div id="loader" role="status" aria-live="polite">
   <div class="card">
     <div class="mark"><span>QB</span> LEGACY</div>
@@ -122,12 +147,13 @@ body {
   var m = /[?&]safe=([\d.]+),([\d.]+),([\d.]+),([\d.]+)/.exec(location.search);
   function measure() {
     var cs = getComputedStyle(p);
-    window.__qbSafe = m
+    return window.__qbSafe = m
       ? { t: +m[1], r: +m[2], b: +m[3], l: +m[4], h: window.innerHeight }
       : { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0,
           b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0, h: window.innerHeight };
   }
   measure();
+  window.__qbSafeNow = measure;   // the engine asks for fresh values (rotation settles late on iOS)
   window.addEventListener("resize", measure);
   window.addEventListener("orientationchange", function () { setTimeout(measure, 300); });
 })();
@@ -145,6 +171,10 @@ body {
     : { sub: "Quarterback career · from High School to the Hall of Fame", dl: "Downloading… ", unz: "Preparing the engine…", start: "Starting…",
         err: "Could not start the game: ", nofeat: "This browser can't run the game: " };
   document.getElementById("sub").textContent = T.sub;
+  if (!pt) {
+    document.getElementById("rot-t").textContent = "Turn your phone upright";
+    document.getElementById("rot-s").textContent = "QB Legacy is played in portrait.";
+  }
   var statusEl = document.getElementById("status");
   var fill = document.getElementById("fill");
   function setStatus(text, frac) {
@@ -201,7 +231,7 @@ body {
 <script>
 (function () {
   var S = window.__qbStatus;
-  var GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":647496,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+  var GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":647528,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
   var missing = Engine.getMissingFeatures({ threads: false });
   if (missing.length) {
     S.fail(S.T.nofeat + missing.join(", "));
