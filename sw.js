@@ -2,7 +2,7 @@
 // and fast. Two caches: the engine (big, rarely changes) and the game (small,
 // changes with every update), so an update only downloads the game part.
 const ENGINE = "qb-engine-36edfd6629";
-const GAME = "qb-game-b4491cfbc4";
+const GAME = "qb-game-76f5d048a3";
 const ENGINE_FILES = ["index.js", "engine.gz.wasm", "index.audio.worklet.js", "index.audio.position.worklet.js"];
 const GAME_FILES = ["./", "index.html", "game.pck.wasm", "manifest.webmanifest",
   "icon-180.png", "icon-192.png", "icon-512.png"];
